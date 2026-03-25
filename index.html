@@ -822,7 +822,6 @@ async function runSubmission() {
         position:   intVal('f-position') ?? 1,
         term:       intVal('f-term')     || undefined,
         repay_mode: intVal('f-repay_mode') ?? 0,
-        amortization: 420,
       },
       borrowers,
       other_properties: otherProps.map(p => ({
