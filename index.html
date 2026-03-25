@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MA Importer v4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Georgia', serif; background: #f7f5f0; color: #1c1a16; min-height: 100vh; }
+  .topbar { background: #1c1a16; color: #e8e4da; padding: 16px 28px; display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-size: 16px; font-weight: normal; letter-spacing: .02em; }
+  .topbar .sub { font-size: 12px; color: #888; font-family: monospace; }
+  .main { max-width: 960px; margin: 28px auto; padding: 0 20px 60px; }
+  .card { background: #fff; border: 1px solid #ddd9cf; border-radius: 4px; padding: 24px; margin-bottom: 18px; }
+  .card-title { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: #888; margin-bottom: 18px; border-bottom: 1px solid #eee; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .drop-zone { border: 2px dashed #c5bfb0; border-radius: 4px; padding: 52px 24px; text-align: center; cursor: pointer; transition: all .2s; }
+  .drop-zone:hover, .drop-zone.over { border-color: #8a7a5a; background: #faf8f3; }
+  .drop-zone .big { font-size: 36px; margin-bottom: 10px; }
+  .drop-zone .label { font-size: 15px; color: #555; }
+  .drop-zone .hint { font-size: 12px; color: #aaa; margin-top: 6px; }
+  .status { padding: 12px 16px; border-radius: 3px; font-size: 13px; margin-bottom: 14px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
+  .status.info  { background: #eef4ff; border: 1px solid #b3cff5; color: #1a4a8a; }
+  .status.ok    { background: #edf7ee; border: 1px solid #a8d8aa; color: #1a4a1e; }
+  .status.err   { background: #fff0f0; border: 1px solid #f5b3b3; color: #7a1a1a; }
+  .status.spin  { background: #f5f0ff; border: 1px solid #c5aaee; color: #3a1a6a; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .full { grid-column: 1 / -1; }
+  .fg { display: flex; flex-direction: column; gap: 4px; }
+  .fg label { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: .06em; color: #777; }
+  .fg input, .fg select { padding: 8px 10px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; font-family: inherit; color: #1c1a16; background: #fff; }
+  .fg input:focus, .fg select:focus { outline: none; border-color: #8a7a5a; }
+  .sec { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: .1em; color: #aaa; margin: 20px 0 12px; border-top: 1px solid #eee; padding-top: 14px; }
+  .btns { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .btn { padding: 10px 22px; border: none; border-radius: 3px; font-size: 13px; cursor: pointer; font-family: inherit; transition: .15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-dark { background: #1c1a16; color: #e8e4da; }
+  .btn-dark:hover { background: #3a3630; }
+  .btn-dark:disabled { background: #999; cursor: not-allowed; }
+  .btn-light { background: #f0ece2; color: #555; border: 1px solid #ccc; }
+  .btn-light:hover { background: #e5e0d0; }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+  .loan-id { font-size: 36px; font-family: monospace; color: #1a4a1e; text-align: center; padding: 20px; border: 2px solid #a8d8aa; border-radius: 4px; background: #edf7ee; margin: 14px 0; }
+  .resp-box { background: #1c1a16; color: #b8e0bb; padding: 14px; border-radius: 4px; font-family: monospace; font-size: 11px; overflow: auto; max-height: 300px; white-space: pre; margin-top: 8px; }
+  .log-box { background: #1c1a16; color: #ccc; padding: 14px; border-radius: 4px; font-family: monospace; font-size: 11px; overflow: auto; max-height: 200px; white-space: pre-wrap; margin-top: 8px; }
+  .sp { width: 14px; height: 14px; border: 2px solid rgba(0,0,0,.15); border-top-color: currentColor; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #file-input { display: none; }
+
+  /* Borrower tabs */
+  .borrower-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab-btn { padding: 6px 14px; border: 1px solid #ccc; background: #f5f2ec; border-radius: 20px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .tab-btn.active { background: #1c1a16; color: #e8e4da; border-color: #1c1a16; }
+  .borrower-block { display: none; }
+  .borrower-block.active { display: block; }
+
+  /* Mortgage sections */
+  .mortgage-block { border: 1px solid #e5e0d5; border-radius: 4px; padding: 16px; margin-bottom: 12px; background: #faf8f4; }
+  .mortgage-block-title { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: .06em; color: #888; margin-bottom: 12px; }
+  .add-btn { font-size: 12px; color: #8a7a5a; background: none; border: 1px dashed #c5bfb0; border-radius: 3px; padding: 6px 14px; cursor: pointer; font-family: inherit; }
+  .add-btn:hover { border-color: #8a7a5a; }
+  .remove-btn { font-size: 11px; color: #c0392b; background: none; border: none; cursor: pointer; font-family: inherit; padding: 2px 6px; }
+
+  /* Progress steps */
+  .progress { display: flex; gap: 0; margin-bottom: 8px; }
+  .progress-step { flex: 1; padding: 8px; text-align: center; font-size: 11px; font-family: monospace; border: 1px solid #ddd; background: #f5f2ec; color: #aaa; }
+  .progress-step.done { background: #edf7ee; color: #1a4a1e; border-color: #a8d8aa; }
+  .progress-step.active { background: #f5f0ff; color: #3a1a6a; border-color: #c5aaee; font-weight: bold; }
+  .progress-step.error { background: #fff0f0; color: #7a1a1a; border-color: #f5b3b3; }
+</style>
+</head>
+<body>
+
+<!-- Password Gate -->
+<div id="pw-gate" style="position:fixed;inset:0;background:#f7f5f0;display:flex;align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#fff;border:1px solid #ddd9cf;border-radius:4px;padding:40px;max-width:360px;width:100%;text-align:center">
+    <div style="font-size:22px;margin-bottom:6px">🔒</div>
+    <div style="font-size:16px;font-family:Georgia,serif;margin-bottom:4px">Mortgage Automator Importer</div>
+    <div style="font-size:12px;color:#888;margin-bottom:24px">Golden Bell Capital Corp</div>
+    <input id="pw-input" type="password" placeholder="Enter password" 
+      style="width:100%;padding:10px;border:1px solid #ccc;border-radius:3px;font-size:14px;font-family:inherit;margin-bottom:10px"
+      onkeydown="if(event.key==='Enter')checkPassword()">
+    <button onclick="checkPassword()" 
+      style="width:100%;padding:10px;background:#1c1a16;color:#e8e4da;border:none;border-radius:3px;font-size:14px;cursor:pointer;font-family:inherit">
+      Unlock
+    </button>
+    <div id="pw-error" style="color:#c0392b;font-size:12px;margin-top:10px;display:none">Incorrect password</div>
+  </div>
+</div>
+
+<script>
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+// To change the password: run sha256('yournewpassword') in console and replace the hash below
+const PASSWORD_HASH = 'f462b00cf55e6b85f484d1fdd56095b1ee3e59b3b15fe713d2bc0a319f7999cc';
+async function checkPassword() {
+  const val = document.getElementById('pw-input').value;
+  const hash = await sha256(val);
+  if (hash === PASSWORD_HASH) {
+    document.getElementById('pw-gate').style.display = 'none';
+    sessionStorage.setItem('ma-auth', '1');
+  } else {
+    document.getElementById('pw-error').style.display = 'block';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+// Auto-unlock if already authenticated this session
+if (sessionStorage.getItem('ma-auth') === '1') {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('pw-gate').style.display = 'none';
+  });
+}
+</script>
+
+<div class="topbar">
+  <h1>Mortgage Automator — PDF Import Tool</h1>
+  <span class="sub">Golden Bell Capital Corp · Lender 10624</span>
+</div>
+
+<div class="main">
+
+  <!-- STEP 1: UPLOAD -->
+  <div class="card" id="card-upload">
+    <div class="card-title">Step 1 — Upload Application PDF</div>
+    <div class="drop-zone" id="dz" onclick="document.getElementById('file-input').click()">
+      <div class="big">📄</div>
+      <div class="label">Drop PDF here or click to choose</div>
+      <div class="hint">Runs locally · free · no API key required</div>
+    </div>
+    <input type="file" id="file-input" accept=".pdf">
+    <div style="margin-top:14px;text-align:center">
+      <button class="btn btn-light btn-sm" onclick="skipToForm()">Skip extraction — fill form manually</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: FORM -->
+  <div id="card-fields" style="display:none">
+    <div id="extr-status"></div>
+    <div id="debug-btn-wrap" style="display:none;margin-top:8px"><button class="btn btn-light btn-sm" onclick="copyDebug()">📋 Copy raw PDF text (for support)</button></div>
+
+    <!-- API SETTINGS (hidden from UI) -->
+    <div style="display:none">
+      <input id="cfg-lender" value="10624">
+      <input id="cfg-key" value="+Kt7JA5uPmB8gE1o">
+      <select id="cfg-env"><option value="live">Live</option><option value="test">Test</option></select>
+    </div>
+
+    <!-- LOAN -->
+    <div class="card">
+      <div class="card-title">Loan Details</div>
+      <div class="grid">
+        <div class="fg full"><label>Loan Title</label><input id="f-loan_title" placeholder="e.g. Clarke, Jacinth"></div>
+        <div class="fg"><label>Purpose</label>
+          <select id="f-purpose"><option value="0">Refinance / ETO</option><option value="1">Purchase</option></select></div>
+        <div class="fg"><label>Initial Status</label>
+          <select id="f-substatus">
+            <option value="28081">New Application</option>
+            <option value="28067">Under Review</option>
+            <option value="28068">Waiting on Commitment</option>
+            <option value="28069">Appraisal / Inspection</option>
+            <option value="28070">Need to Instruct Lawyers</option>
+          </select></div>
+      </div>
+
+      <div class="sec">Mortgage Terms</div>
+      <div class="grid3">
+        <div class="fg"><label>Loan Amount ($)</label><input id="f-amount" type="number" placeholder="600000"></div>
+        <div class="fg"><label>Interest Rate (%)</label><input id="f-interest" type="number" step="0.001" placeholder="6.990"></div>
+        <div class="fg"><label>Position</label>
+          <select id="f-position"><option value="1">First</option><option value="2">Second</option><option value="3">Third</option><option value="4">Fourth</option></select></div>
+        <div class="fg"><label>Term (months)</label><input id="f-term" type="number" placeholder="12"></div>
+        <div class="fg"><label>Repayment</label>
+          <select id="f-repay_mode"><option value="0">Interest Only</option><option value="1">Principal + Interest</option><option value="2">Capitalizing</option></select></div>
+        <div class="fg"><label>Loan Type</label>
+          <select id="f-loan_type"><option value="0">Standard</option><option value="1">Construction</option><option value="2">Commercial</option><option value="3">Fix &amp; Flip</option><option value="4">Personal</option></select></div>
+      </div>
+    </div>
+
+    <!-- BORROWERS -->
+    <div class="card" id="borrowers-card">
+      <div class="card-title">
+        Borrowers
+        <button class="btn btn-light btn-sm" onclick="addBorrower()">+ Add Borrower</button>
+      </div>
+      <div class="borrower-tabs" id="borrower-tabs"></div>
+      <div id="borrower-blocks"></div>
+    </div>
+
+    <!-- MAIN PROPERTY -->
+    <div class="card">
+      <div class="card-title">Main Property</div>
+      <div class="grid">
+        <div class="fg full"><label>Street</label><input id="f-street" placeholder="132 Ardwick Boulevard"></div>
+        <div class="fg"><label>City</label><input id="f-city" placeholder="Toronto"></div>
+        <div class="fg"><label>Province</label><input id="f-prov" placeholder="ON"></div>
+        <div class="fg"><label>Postal Code</label><input id="f-zip" placeholder="M9M 1W2"></div>
+        <div class="fg"><label>Property Value ($)</label><input id="f-property_value" type="number" placeholder="1050000"></div>
+        <div class="fg"><label>Purchase Price ($)</label><input id="f-purchase_price" type="number" placeholder="1050000"></div>
+        <div class="fg"><label>Property Type</label>
+          <select id="f-property_type">
+            <option value="1">Detached</option><option value="2">Semi-Detached</option>
+            <option value="3">Row / Town House</option><option value="9">Apartment</option>
+            <option value="11">Condo</option><option value="4">Commercial</option>
+            <option value="6">Land</option><option value="0">Other</option>
+          </select></div>
+      </div>
+
+      <div class="sec">Existing Mortgages on Main Property</div>
+      <div id="main-mortgages"></div>
+      <button class="add-btn" onclick="addMainMortgage()">+ Add Existing Mortgage</button>
+    </div>
+
+    <!-- OTHER PROPERTIES -->
+    <div class="card">
+      <div class="card-title">
+        Other Properties
+        <button class="btn btn-light btn-sm" onclick="addOtherProperty()">+ Add Property</button>
+      </div>
+      <div id="other-properties"></div>
+    </div>
+
+    <div class="btns">
+      <button class="btn btn-dark" id="btn-submit" onclick="runSubmission()">Submit to Mortgage Automator</button>
+      <button class="btn btn-light" onclick="resetTool()">↩ Start Over</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: RESULT -->
+  <div class="card" id="card-result" style="display:none">
+    <div class="card-title">Submission Log</div>
+    <div class="progress" id="progress-bar"></div>
+    <div id="result-body"></div>
+  </div>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ────────────────────────────────────────────────
+let borrowerCount = 0;
+let activeBorrowerIdx = 0;
+let otherPropertyCount = 0;
+let mainMortgageCount = 0;
+let logLines = [];
+
+// ── Init ─────────────────────────────────────────────────
+function init() {
+  addBorrower(); // Start with one borrower
+}
+
+// ── Drop zone ────────────────────────────────────────────
+const dz = document.getElementById('dz');
+const fi = document.getElementById('file-input');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') processFile(f);
+  else alert('Please drop a PDF file.');
+});
+fi.addEventListener('change', () => fi.files[0] && processFile(fi.files[0]));
+
+function skipToForm() {
+  document.getElementById('card-upload').style.display = 'none';
+  document.getElementById('card-fields').style.display = 'block';
+}
+
+// ── PDF Extraction ───────────────────────────────────────
+async function processFile(file) {
+  document.getElementById('card-upload').style.display = 'none';
+  document.getElementById('card-fields').style.display = 'block';
+  setStatus('extr-status', 'spin', '<div class="sp"></div><div>Reading PDF…</div>');
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      // Group items by Y position to reconstruct lines, then join lines with \n
+      const lineMap = {};
+      for (const item of content.items) {
+        const y = Math.round(item.transform[5]);
+        if (!lineMap[y]) lineMap[y] = [];
+        lineMap[y].push(item.str);
+      }
+      const pageText = Object.keys(lineMap)
+        .sort((a,b) => b - a) // PDF y increases downward when flipped
+        .map(y => lineMap[y].join(' '))
+        .join('\n');
+      pages.push(pageText);
+    }
+    const text = pages.join('\n');
+    console.log('=== RAW PDF TEXT ===\n' + text);
+    fillFromText(text);
+    window._lastPdfText = text;
+    document.getElementById('debug-btn-wrap').style.display='block';
+    setStatus('extr-status', 'ok', '✓ PDF read. Review all fields — especially borrower DOB, SIN, and mortgage details — then submit.');
+  } catch (err) {
+    setStatus('extr-status', 'err', `⚠ PDF read failed: ${err.message}. Fill fields manually.`);
+  }
+}
+
+// ── Universal Mortgage Application Parser ───────────────
+// Handles: Mortgage Architects (MARW), DLC Canada Mortgage Group, The Mortgage Trail, and similar formats
+
+function parseMADate(s) {
+  if (!s) return null;
+  const mo = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
+               Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+  let m = s.match(/([A-Za-z]{3})[-](\d{2})[-](\d{4})/);
+  if (m) return `${m[3]}-${mo[m[1]]||'01'}-${m[2]}`;
+  m = s.match(/([A-Za-z]{3})-(\d{2})-(\d{2})$/);
+  if (m) return `20${m[3]}-${mo[m[1]]||'01'}-${m[2]}`;
+  m = s.match(/([A-Za-z]{3})\.\s*(\d{1,2}),?\s*(\d{4})/);
+  if (m) return `${m[3]}-${mo[m[1]]||'01'}-${m[2].padStart(2,'0')}`;
+  return null;
+}
+function toNum(s) { return parseFloat(String(s||'').replace(/[$,\s]/g,'')) || null; }
+
+function parseAddr(addr) {
+  const zipM  = addr.match(/([A-Z]\d[A-Z]\s*\d[A-Z]\d)/);
+  const provM = addr.match(/\b(ON|BC|AB|QC|MB|SK|NS|NB|NL|PE)\b/);
+  const zip   = zipM  ? zipM[1].replace(/\s/,'') : '';
+  const prov  = provM ? provM[1] : '';
+  let rest = addr;
+  if (zipM)  rest = rest.replace(zipM[1], '');
+  if (provM) rest = rest.replace(provM[0], '');
+  rest = rest.replace(/\b(Ontario|British Columbia|Alberta|Quebec|Manitoba|Saskatchewan)\b/gi,'');
+  rest = rest.replace(/,/g,'').replace(/\s+/g,' ').trim();
+  const road = '(?:Drive|Road|Avenue|Blvd|Boulevard|Street|St|Crescent|Cres|Way|Court|Crt|Rd|Lane|Place|Terrace|Ter)';
+  const sm = rest.match(new RegExp('^(\\d+[A-Za-z\\-]*\\s+[\\w\\s]+?' + road + ')\\s+(.+)$','i'));
+  if (sm) return { street:sm[1].trim(), city:sm[2].trim(), prov, zip };
+  return { street:rest, city:'', prov, zip };
+}
+
+function stripPrefix(name) {
+  return name.replace(/^(Mrs\.?|Mr\.?|Ms\.?|Dr\.?|Miss\.?)\s*/i,'').trim();
+}
+
+function fillFromText(t) {
+  let m;
+
+  // ── FINANCING ──────────────────────────────────────────
+  // "Total Mortgage Amount:   $350,000.00   Net Rate:   5.1900%"
+  m = t.match(/Total Mortgage Amount:\s*\$\s*([\d,]+\.?\d*)\s+Net Rate:\s*([\d.]+)%/);
+  if (m) { set('f-amount', toNum(m[1])); set('f-interest', parseFloat(m[2])); }
+  if (!m) {
+    // "Total Mortgage Amount: Net Rate:  6.990%  $ 600,000.00"
+    m = t.match(/Total Mortgage Amount:[^\n]*Net Rate:\s*([\d.]+)%[^\n]*\$\s*([\d,]+)/);
+    if (m) { set('f-interest', parseFloat(m[1])); set('f-amount', toNum(m[2])); }
+  }
+
+  // Term: "3 yr" or "1 Year" or "Fixed 1 Year 35 Years"
+  m = t.match(/Term:\s*(\d+)\s*yr\b/i);
+  if (!m) m = t.match(/(?:Fixed\s+)?(\d+)\s+Year[s]?\s+\d+\s+Years?/);
+  if (!m) m = t.match(/Term:\s*(?:Fixed\s+)?(\d+)\s+Year/i);
+  if (m) set('f-term', parseInt(m[1]) * 12);
+
+  // Repayment type
+  m = t.match(/(Principal And Interest|Interest Only|Capitalizing)\s*\n\s*Repayment Type:/);
+  if (!m) m = t.match(/Repayment Type:\s*\n?\s*(Principal And Interest|Interest Only|Capitalizing)/i);
+  if (!m) m = t.match(/(Principal And Interest|Interest Only|Capitalizing)\s*\n/);
+  if (m) {
+    const rm = {'Principal And Interest':'1','Interest Only':'0','Capitalizing':'2'};
+    selVal('f-repay_mode', rm[m[1]] || '0');
+  }
+
+  // Purpose
+  if (/Purpose:\s*Purchase/i.test(t)) selVal('f-purpose','1');
+  else if (/Refinance/i.test(t)) selVal('f-purpose','0');
+  else if (/Purchase/i.test(t)) selVal('f-purpose','1');
+
+  // Position
+  m = t.match(/(?:Requested Mortgage[\s\S]{0,300}?)Mortgage Type:\s*(First|Second|Third|Fourth)/i);
+  if (!m) m = t.match(/(?:Requested Mortgage[\s\S]{0,200}?)(First|Second|Third|Fourth)\s*\n/i);
+  if (m) { const pm={'first':'1','second':'2','third':'3','fourth':'4'}; selVal('f-position', pm[m[1].toLowerCase()]||'1'); }
+
+  // ── MAIN PROPERTY ──────────────────────────────────────
+  // Pattern 1 (MARW/DLC): address on line just before "Property Address:" label
+  m = t.match(/([^\n]+(?:ON|BC|AB|QC|MB)[^\n]+[A-Z]\d[A-Z]\s*\d[A-Z]\d)[^\n]*\n\s*Property Address:/);
+  if (m) {
+    const p = parseAddr(m[1].trim());
+    set('f-street',p.street); set('f-city',p.city); set('f-prov',p.prov); set('f-zip',p.zip);
+  }
+  // Pattern 2 (Mortgage Trail): "Property Address:   709-1285 Dupont Street, Toronto, Ontario, M6H 0E3"
+  if (!document.getElementById('f-street').value) {
+    m = t.match(/Property Address:\s+(.+?[A-Z]\d[A-Z]\s*\d[A-Z]\d)/);
+    if (m) {
+      const p = parseAddr(m[1].trim());
+      set('f-street',p.street); set('f-city',p.city); set('f-prov',p.prov); set('f-zip',p.zip);
+    }
+  }
+
+  // Property value / purchase price
+  m = t.match(/Purchase Price:\s*Estimated Value:\s*Appraised Value:\s*\$\s*([\d,]+)/);
+  if (!m) m = t.match(/Appraised Value:\s*\$\s*([\d,]+)/);
+  if (!m) m = t.match(/Estimated Value:\s*\$\s*([\d,]+)/);
+  if (m) { set('f-property_value', toNum(m[1])); set('f-purchase_price', toNum(m[1])); }
+  m = t.match(/Purchase Price:\s*\$\s*([\d,]+)/);
+  if (m && toNum(m[1])) { set('f-purchase_price', toNum(m[1])); if (!document.getElementById('f-property_value').value) set('f-property_value', toNum(m[1])); }
+
+  // ── MAIN PROPERTY EXISTING MORTGAGE ──────────────────
+  const refiBlock = t.match(/Refinance \/ Switch \/ ETO([\s\S]{0,800}?)(?:PROPERTY|DLC Canada|Mortgage Architects|The Mortgage Trail)/);
+  if (refiBlock) {
+    const rb = refiBlock[1];
+    const holderM = rb.match(/Mortgage Holder:\s*\n?\s*([^\n]+)/);
+    const rateM   = rb.match(/Mtg\.?\s*Interest Rate:\s*([\d.]+)%/);
+    const matM    = rb.match(/Maturity Date:\s*([\w\-. ,]+?)(?:\s{2,}|\n)/);
+    const balM    = rb.match(/Mortgage Balance:\s*\$?\s*([\d,]+\.?\d*)/);
+    const payM    = rb.match(/Frequency Payment:\s*\$?\s*([\d,]+\.?\d*)/);
+    const inlineM = rb.match(/^\s*\$\s*([\d,]+\.?\d*)\s+\$\s*([\d,]+\.?\d*)/m);
+    const balance = balM ? toNum(balM[1]) : (inlineM ? toNum(inlineM[1]) : null);
+    const payment = payM ? toNum(payM[1]) : (inlineM ? toNum(inlineM[2]) : null);
+    const holder  = holderM ? holderM[1].trim() : '';
+    const rate    = rateM ? parseFloat(rateM[1]) : '';
+    const maturity = matM ? parseMADate(matM[1].trim()) : '';
+    if (balance || holder) {
+      addMainMortgage({ holder, type_val:1, balance, face_value:balance, payment, interest_rate:rate, maturity_date:maturity, rate_type:1, term_type:0 });
+    }
+  }
+
+  // ── BORROWERS ──────────────────────────────────────────
+  const sections = t.split(/APPLICANT(?:\s*-\s*Continued)?/).slice(1);
+  sections.forEach((sec, i) => {
+    if (i >= 1) addBorrower();
+
+    // Name on next line: "Name:\n Mrs. Diana Christou"
+    // Name on same line: "Name:   Mr Adalberto Aguilar hernandez   Type:"
+    m = sec.match(/Name:\s*\n\s*(.+)/);
+    if (!m) m = sec.match(/Name:\s+(.+?)(?:\s{2,}|Type:|$)/m);
+    if (m) {
+      const parts = stripPrefix(m[1].trim()).replace(/\s+/g,' ').trim().split(' ');
+      if (parts.length >= 2) { borSet(i,'first_name',parts[0]); borSet(i,'last_name',parts.slice(1).join(' ')); }
+    }
+
+    m = sec.match(/[eE][-]?[mM]ail:\s*(\S+@\S+)/);
+    if (m) borSet(i,'email',m[1]);
+
+    // Phones
+    m = sec.match(/Work Phone:\s*([\d\(\)\-\+ ]+?)(?:\s{2,}|Ext\.|Cell|\n|$)/m);
+    if (m && m[1].replace(/\D/g,'').length >= 7) borSet(i,'workphone', m[1].trim());
+    m = sec.match(/Cell Phone:\s*([\d\(\)\-\+ ]+?)(?:\s{2,}|Home|\n|$)/m);
+    if (m && m[1].replace(/\D/g,'').length >= 7) borSet(i,'mobile', m[1].trim());
+    m = sec.match(/Home Phone:\s*([\d\(\)\-\+ ]+?)(?:\s{2,}|\n|Fax|$)/m);
+    if (m && m[1].replace(/\D/g,'').length >= 7) borSet(i,'homephone', m[1].trim());
+
+    // Marital / DOB / SIN
+    // Format A (Mortgage Trail): labels on one line, values follow
+    m = sec.match(/Marital Status:\s*(Single|Married|Divorced|Widowed|Common.?Law)\s+Date of Birth:\s*([A-Za-z]{3}\.\s*\d{1,2},?\s*\d{4})\s+Dependents:\s*\d+\s+SIN:\s*([\d\- ]{9,14})/i);
+    // Format B (DLC/MARW): all values crammed after labels
+    if (!m) m = sec.match(/Marital Status:.*?SIN:\s*(Single|Married|Divorced|Widowed|Common.?Law)\s+([\w\.\-]+)\s+\d+\s+([\d\-]+)/i);
+    if (m) {
+      const mel = document.getElementById(`b${i}-marital`); if (mel) mel.value = m[1];
+      borSet(i,'dob', parseMADate(m[2]));
+      borSet(i,'ssn', m[3].replace(/[\- ]/g,''));
+    } else {
+      const mm2 = sec.match(/Marital Status:\s*(Single|Married|Divorced|Widowed|Common.?Law)/i);
+      if (mm2) { const mel = document.getElementById(`b${i}-marital`); if (mel) mel.value = mm2[1]; }
+      const dm = sec.match(/Date of Birth:\s*([A-Za-z]{3}[\.\-][^\n]{4,15}\d{4})/i);
+      if (dm) borSet(i,'dob', parseMADate(dm[1]));
+      const sm2 = sec.match(/SIN:\s*([\d\- ]{9,14})/);
+      if (sm2) borSet(i,'ssn', sm2[1].replace(/[\- ]/g,''));
+    }
+
+    // Residential status
+    m = sec.match(/Residential Status:\s*(I own my own home|Own|Rent|Live with Parents)/i);
+    if (!m) m = sec.match(/(Own|Rent|Live with Parents)\s+\d+\s+[Yy]r/i);
+    if (m) {
+      const rsMap = {'i own my own home':'1','own':'1','rent':'2','live with parents':'3'};
+      const el = document.getElementById(`b${i}-residential_status`);
+      if (el) el.value = rsMap[m[1].toLowerCase()] || '';
+    }
+
+    // Address
+    m = sec.match(/Address:\s+(\d+[A-Za-z\-]*\s+.+?)\s*\n/);
+    if (m) { const p = parseAddr(m[1].trim()); borSet(i,'addr-street',p.street); borSet(i,'addr-city',p.city); borSet(i,'addr-prov',p.prov); borSet(i,'addr-zip',p.zip); }
+
+    updateBorrowerTab(i);
+  });
+
+  // Loan title from first borrower
+  if (sections[0]) {
+    m = sections[0].match(/Name:\s*\n\s*(.+)/);
+    if (!m) m = sections[0].match(/Name:\s+(.+?)(?:\s{2,}|Type:|$)/m);
+    if (m) {
+      const parts = stripPrefix(m[1].trim()).replace(/\s+/g,' ').trim().split(' ');
+      if (parts.length >= 2) set('f-loan_title', `${parts.slice(1).join(' ')}, ${parts[0]}`);
+    }
+  }
+
+  // ── OTHER PROPERTIES ───────────────────────────────────
+  const opStart = t.indexOf(' Other Properties\n');
+  const opEnd   = t.indexOf(' This document', opStart);
+  if (opStart < 0) return;
+  const opSec = t.substring(opStart, opEnd > 0 ? opEnd : opStart + 4000);
+
+  const addrMatches = [...opSec.matchAll(/Address:\s+(\d+[A-Za-z\-]*\s+.+?)\s*\n/g)];
+  addrMatches.forEach((am, ai) => {
+    const bStart = am.index;
+    const bEnd   = ai+1 < addrMatches.length ? addrMatches[ai+1].index : opSec.length;
+    const block  = opSec.substring(bStart, bEnd);
+    const p      = parseAddr(am[1].trim());
+    const vm     = block.match(/Property Value:\s*\$\s*([\d,]+)/);
+
+    addOtherProperty({
+      address: { street:p.street, city:p.city, prov:p.prov, zip:p.zip },
+      value: toNum((vm||[])[1]||'0'),
+      purchase_price: toNum((vm||[])[1]||'0'),
+      property_type: 0,
+    });
+    const opIdx = otherPropertyCount - 1;
+
+    // Pattern 1 (MARW): balance before "Mortgage Balance:" label
+    const mtgs = [...block.matchAll(/\$\s*([\d,]+\.?\d*)\s+Mortgage Balance:[^\n]+\n\s*(First|Second|Third)\s+Monthly\s*\n[^\n]*Mtg\.?\s*Interest Rate:[^\d]*([\d.]+)%[^\n]*Maturity Date:\s*([\w\-]+)\s*\n[^\n]*Loan Type:\s*Mortgage\s+([^\n]+)/g)];
+    mtgs.forEach(mm => {
+      const posMap = {'first':1,'second':2,'third':3};
+      addOtherMortgage(opIdx, { type:posMap[mm[2].trim().toLowerCase()]||1, holder:mm[5].trim(), balance:toNum(mm[1]), face_value:toNum(mm[1]), payment:toNum(block.match(/Frequency Payment:\s*\$\s*([\d,]+\.?\d*)/)?.[1]||'0'), interest_rate:parseFloat(mm[3]), maturity_date:parseMADate(mm[4]), rate_type:1, term_type:0 });
+    });
+
+    // Pattern 2 (DLC): "Mortgage Balance: $X  Frequency Payment: $Y ..."
+    if (mtgs.length === 0) {
+      const mtgs2 = [...block.matchAll(/Mortgage Balance:\s*\$\s*([\d,]+\.?\d*)\s+Frequency Payment:\s*\$\s*([\d,]+\.?\d*)[\s\S]{0,300}?Mtg\.?\s*Interest Rate:\s*([\d.]+)%[\s\S]{0,100}?Maturity Date:\s*([\w\-]+)[\s\S]{0,200}?Mortgage Holder:\s*\n?\s*([^\n]+)/g)];
+      mtgs2.forEach(mm => {
+        addOtherMortgage(opIdx, { type:1, holder:mm[5].trim(), balance:toNum(mm[1]), face_value:toNum(mm[1]), payment:toNum(mm[2]), interest_rate:parseFloat(mm[3]), maturity_date:parseMADate(mm[4]), rate_type:1, term_type:0 });
+      });
+    }
+
+    // Pattern 3 (Mortgage Trail): "Mortgage Type: First  Mortgage Balance: $550,000.00 ..."
+    if (mtgs.length === 0) {
+      const mtgs3 = [...block.matchAll(/Mortgage Type:\s*(First|Second|Third)\s+Mortgage Balance:\s*\$\s*([\d,]+\.?\d*)\s+Frequency Payment:\s*\$\s*([\d,]+\.?\d*)[\s\S]{0,200}?Maturity Date:\s*([A-Za-z]{3}\.\s*\d{1,2},?\s*\d{4})[\s\S]{0,100}?Mtg\.\s*Interest Rate:\s*([\d.]+)%[\s\S]{0,200}?Mortgage Holder:\s*([^\n]+)/g)];
+      mtgs3.forEach(mm => {
+        const posMap = {'first':1,'second':2,'third':3};
+        addOtherMortgage(opIdx, { type:posMap[mm[1].toLowerCase()]||1, holder:mm[6].trim(), balance:toNum(mm[2]), face_value:toNum(mm[2]), payment:toNum(mm[3]), interest_rate:parseFloat(mm[5]), maturity_date:parseMADate(mm[4]), rate_type:1, term_type:0 });
+      });
+    }
+  });
+}
+
+// ── Borrower Management ──────────────────────────────────
+function addBorrower(data = {}) {
+  const idx = borrowerCount++;
+  const tabsEl = document.getElementById('borrower-tabs');
+  const blocksEl = document.getElementById('borrower-blocks');
+
+  const tab = document.createElement('button');
+  tab.className = 'tab-btn' + (idx === 0 ? ' active' : '');
+  tab.id = `tab-${idx}`;
+  tab.textContent = data.first_name ? `${data.first_name} ${data.last_name}` : `Borrower ${idx + 1}`;
+  tab.onclick = () => switchBorrower(idx);
+  tabsEl.appendChild(tab);
+
+  const block = document.createElement('div');
+  block.className = 'borrower-block' + (idx === 0 ? ' active' : '');
+  block.id = `borrower-${idx}`;
+  block.innerHTML = borrowerHTML(idx, data);
+  blocksEl.appendChild(block);
+
+  if (idx > 0) switchBorrower(idx);
+  return idx;
+}
+
+function borrowerHTML(idx, d = {}) {
+  const v = (k, def='') => d[k] != null ? d[k] : def;
+  const addr = d.address || {};
+  return `
+    <div class="grid">
+      <div class="fg"><label>First Name</label><input id="b${idx}-first_name" value="${v('first_name')}" oninput="updateBorrowerTab(${idx})"></div>
+      <div class="fg"><label>Last Name</label><input id="b${idx}-last_name" value="${v('last_name')}" oninput="updateBorrowerTab(${idx})"></div>
+      <div class="fg"><label>Email</label><input id="b${idx}-email" type="email" value="${v('email')}"></div>
+      <div class="fg"><label>Mobile</label><input id="b${idx}-mobile" value="${v('mobile')}"></div>
+      <div class="fg"><label>Home Phone</label><input id="b${idx}-homephone" value="${v('homephone')}"></div>
+      <div class="fg"><label>Work Phone</label><input id="b${idx}-workphone" value="${v('workphone')}"></div>
+      <div class="fg"><label>Date of Birth (YYYY-MM-DD)</label><input id="b${idx}-dob" placeholder="1961-09-23" value="${v('dob')}"></div>
+      <div class="fg"><label>SIN</label><input id="b${idx}-ssn" value="${v('ssn')}"></div>
+      <div class="fg"><label>Marital Status</label>
+        <select id="b${idx}-marital">
+          <option value="">—</option><option value="Single" ${v('marital')==='Single'?'selected':''}>Single</option>
+          <option value="Married" ${v('marital')==='Married'?'selected':''}>Married</option>
+          <option value="Divorced" ${v('marital')==='Divorced'?'selected':''}>Divorced</option>
+          <option value="Widowed" ${v('marital')==='Widowed'?'selected':''}>Widowed</option>
+        </select></div>
+      <div class="fg"><label>Residential Status</label>
+        <select id="b${idx}-residential_status">
+          <option value="">—</option><option value="1" ${v('residential_status')==1?'selected':''}>Own</option>
+          <option value="2" ${v('residential_status')==2?'selected':''}>Rent</option>
+          <option value="3" ${v('residential_status')==3?'selected':''}>Live with Parents</option>
+        </select></div>
+      <div class="fg"><label>Corporation?</label>
+        <select id="b${idx}-iscorporation">
+          <option value="0">No (Individual)</option><option value="1">Yes</option>
+        </select></div>
+      <div class="fg"><label>Is Main Borrower?</label>
+        <select id="b${idx}-is_main">
+          <option value="1" ${idx===0?'selected':''}>Yes</option>
+          <option value="0" ${idx!==0?'selected':''}>No</option>
+        </select></div>
+    </div>
+    <div class="sec">Home Address</div>
+    <div class="grid">
+      <div class="fg full"><label>Street</label><input id="b${idx}-addr-street" value="${addr.street||''}"></div>
+      <div class="fg"><label>City</label><input id="b${idx}-addr-city" value="${addr.city||''}"></div>
+      <div class="fg"><label>Province</label><input id="b${idx}-addr-prov" value="${addr.prov||''}"></div>
+      <div class="fg"><label>Postal Code</label><input id="b${idx}-addr-zip" value="${addr.zip||''}"></div>
+    </div>
+    ${idx > 0 ? `<div style="margin-top:14px"><button class="remove-btn" onclick="removeBorrower(${idx})">✕ Remove this borrower</button></div>` : ''}
+  `;
+}
+
+function switchBorrower(idx) {
+  document.querySelectorAll('.borrower-block').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  const block = document.getElementById(`borrower-${idx}`);
+  const tab = document.getElementById(`tab-${idx}`);
+  if (block) block.classList.add('active');
+  if (tab) tab.classList.add('active');
+  activeBorrowerIdx = idx;
+}
+
+function updateBorrowerTab(idx) {
+  const fn = val(`b${idx}-first_name`);
+  const ln = val(`b${idx}-last_name`);
+  const tab = document.getElementById(`tab-${idx}`);
+  if (tab) tab.textContent = [fn, ln].filter(Boolean).join(' ') || `Borrower ${idx + 1}`;
+}
+
+function removeBorrower(idx) {
+  document.getElementById(`borrower-${idx}`)?.remove();
+  document.getElementById(`tab-${idx}`)?.remove();
+  switchBorrower(0);
+}
+
+// ── Main Property Mortgages ──────────────────────────────
+function addMainMortgage(data = {}) {
+  const idx = mainMortgageCount++;
+  const container = document.getElementById('main-mortgages');
+  const div = document.createElement('div');
+  div.className = 'mortgage-block';
+  div.id = `mm-${idx}`;
+  const v = (k, def='') => data[k] != null ? data[k] : def;
+  div.innerHTML = `
+    <div class="mortgage-block-title">Existing Mortgage ${idx + 1} <button class="remove-btn" onclick="document.getElementById('mm-${idx}').remove()">✕ Remove</button></div>
+    <div class="grid3">
+      <div class="fg"><label>Holder</label><input id="mm${idx}-holder" value="${v('holder')}"></div>
+      <div class="fg"><label>Position</label>
+        <select id="mm${idx}-type">
+          <option value="1">First</option><option value="2">Second</option><option value="3">Third</option>
+        </select></div>
+      <div class="fg"><label>Balance ($)</label><input id="mm${idx}-balance" type="number" value="${v('balance')}"></div>
+      <div class="fg"><label>Face Value ($)</label><input id="mm${idx}-face_value" type="number" value="${v('face_value')}"></div>
+      <div class="fg"><label>Payment ($/mo)</label><input id="mm${idx}-payment" type="number" value="${v('payment')}"></div>
+      <div class="fg"><label>Interest Rate (%)</label><input id="mm${idx}-interest_rate" type="number" step="0.01" value="${v('interest_rate')}"></div>
+      <div class="fg"><label>Rate Type</label>
+        <select id="mm${idx}-rate_type">
+          <option value="1">Fixed</option><option value="2">Variable</option><option value="3">Adjustable</option>
+        </select></div>
+      <div class="fg"><label>Term Type</label>
+        <select id="mm${idx}-term_type">
+          <option value="0">Fully Closed</option><option value="1">Closed Variable</option><option value="3">Fully Open</option>
+        </select></div>
+      <div class="fg"><label>Maturity Date (YYYY-MM-DD)</label><input id="mm${idx}-maturity_date" placeholder="2025-12-31" value="${v('maturity_date')}"></div>
+    </div>`;
+  container.appendChild(div);
+  // Set select values from data
+  if (data.type_val != null) { const el = document.getElementById(`mm${idx}-type`); if(el) el.value = String(data.type_val); }
+  if (data.rate_type != null) { const el = document.getElementById(`mm${idx}-rate_type`); if(el) el.value = String(data.rate_type); }
+  if (data.term_type != null) { const el = document.getElementById(`mm${idx}-term_type`); if(el) el.value = String(data.term_type); }
+}
+
+// ── Other Properties ─────────────────────────────────────
+function addOtherProperty(data = {}) {
+  const idx = otherPropertyCount++;
+  const container = document.getElementById('other-properties');
+  const div = document.createElement('div');
+  div.className = 'mortgage-block';
+  div.id = `op-${idx}`;
+  const addr = data.address || {};
+  const v = (k, def='') => data[k] != null ? data[k] : def;
+  div.innerHTML = `
+    <div class="mortgage-block-title">Property ${idx + 1} <button class="remove-btn" onclick="document.getElementById('op-${idx}').remove()">✕ Remove</button></div>
+    <div class="grid">
+      <div class="fg full"><label>Street</label><input id="op${idx}-street" value="${addr.street||''}"></div>
+      <div class="fg"><label>City</label><input id="op${idx}-city" value="${addr.city||''}"></div>
+      <div class="fg"><label>Province</label><input id="op${idx}-prov" value="${addr.prov||''}"></div>
+      <div class="fg"><label>Postal Code</label><input id="op${idx}-zip" value="${addr.zip||''}"></div>
+      <div class="fg"><label>Value ($)</label><input id="op${idx}-value" type="number" value="${v('value')}"></div>
+      <div class="fg"><label>Purchase Price ($)</label><input id="op${idx}-purchase_price" type="number" value="${v('purchase_price')}"></div>
+      <div class="fg"><label>Property Type</label>
+        <select id="op${idx}-property_type">
+          <option value="0">Other / Residential</option><option value="1">Detached</option>
+          <option value="2">Semi-Detached</option><option value="3">Town House</option>
+          <option value="11">Condo</option><option value="9">Apartment</option>
+        </select></div>
+    </div>
+    <div class="sec" style="margin-top:14px">Existing Mortgages on This Property</div>
+    <div id="op${idx}-mortgages"></div>
+    <button class="add-btn" onclick="addOtherMortgage(${idx})">+ Add Existing Mortgage</button>`;
+  container.appendChild(div);
+}
+
+let otherMortgageCounts = {};
+function addOtherMortgage(propIdx, data = {}) {
+  if (!otherMortgageCounts[propIdx]) otherMortgageCounts[propIdx] = 0;
+  const mIdx = otherMortgageCounts[propIdx]++;
+  const container = document.getElementById(`op${propIdx}-mortgages`);
+  const div = document.createElement('div');
+  div.className = 'mortgage-block';
+  div.id = `op${propIdx}-m${mIdx}`;
+  const v = (k, def='') => data[k] != null ? data[k] : def;
+  div.innerHTML = `
+    <div class="mortgage-block-title">Mortgage ${mIdx + 1} <button class="remove-btn" onclick="document.getElementById('op${propIdx}-m${mIdx}').remove()">✕ Remove</button></div>
+    <div class="grid3">
+      <div class="fg"><label>Holder</label><input id="op${propIdx}-m${mIdx}-holder" value="${v('holder')}"></div>
+      <div class="fg"><label>Position</label>
+        <select id="op${propIdx}-m${mIdx}-type">
+          <option value="1">First</option><option value="2">Second</option><option value="3">Third</option>
+        </select></div>
+      <div class="fg"><label>Balance ($)</label><input id="op${propIdx}-m${mIdx}-balance" type="number" value="${v('balance')}"></div>
+      <div class="fg"><label>Face Value ($)</label><input id="op${propIdx}-m${mIdx}-face_value" type="number" value="${v('face_value')}"></div>
+      <div class="fg"><label>Payment ($/mo)</label><input id="op${propIdx}-m${mIdx}-payment" type="number" value="${v('payment')}"></div>
+      <div class="fg"><label>Interest Rate (%)</label><input id="op${propIdx}-m${mIdx}-interest_rate" type="number" step="0.01" value="${v('interest_rate')}"></div>
+      <div class="fg"><label>Rate Type</label>
+        <select id="op${propIdx}-m${mIdx}-rate_type">
+          <option value="1">Fixed</option><option value="2">Variable</option>
+        </select></div>
+      <div class="fg"><label>Term Type</label>
+        <select id="op${propIdx}-m${mIdx}-term_type">
+          <option value="0">Fully Closed</option><option value="1">Closed Variable</option><option value="3">Fully Open</option>
+        </select></div>
+      <div class="fg"><label>Maturity (YYYY-MM-DD)</label><input id="op${propIdx}-m${mIdx}-maturity_date" placeholder="2025-12-31" value="${v('maturity_date')}"></div>
+    </div>`;
+  container.appendChild(div);
+  // Set select values from data
+  if (data.type != null) { const el = document.getElementById(`op${propIdx}-m${mIdx}-type`); if(el) el.value = String(data.type); }
+  if (data.rate_type != null) { const el = document.getElementById(`op${propIdx}-m${mIdx}-rate_type`); if(el) el.value = String(data.rate_type); }
+  if (data.term_type != null) { const el = document.getElementById(`op${propIdx}-m${mIdx}-term_type`); if(el) el.value = String(data.term_type); }
+}
+
+// ── Helpers ──────────────────────────────────────────────
+function val(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function numVal(id) { const x = parseFloat(val(id)); return isNaN(x) ? undefined : x; }
+function intVal(id) { const x = parseInt(val(id)); return isNaN(x) ? undefined : x; }
+function set(id, v) { const el = document.getElementById(id); if (el && v != null) el.value = v; }
+function selVal(id, v) { const el = document.getElementById(id); if (el && v != null) el.value = String(v); }
+function borSet(idx, field, v) { set(`b${idx}-${field}`, v); }
+function setStatus(id, type, html) { document.getElementById(id).innerHTML = `<div class="status ${type}">${html}</div>`; }
+
+function dateToUnix(str) {
+  if (!str) return undefined;
+  const d = new Date(str + 'T00:00:00');
+  return isNaN(d) ? undefined : Math.floor(d.getTime() / 1000);
+}
+
+// ── SHA-1 auth (matching Python script exactly) ──────────
+async function sha1hex(str) {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function maAuth(lenderId, apiKey, entity, action) {
+  const now = new Date();
+  // Python uses strftime("%Y-%m-%d-%H") which IS zero-padded — matching that exactly
+  const pad2 = n => String(n).padStart(2, '0');
+  const ts = `${now.getUTCFullYear()}-${pad2(now.getUTCMonth()+1)}-${pad2(now.getUTCDate())}-${pad2(now.getUTCHours())}`;
+  const raw = `${lenderId}-${apiKey}-${entity}/${action}-${ts}`;
+  log(`Auth: ${raw}`);
+  return sha1hex(raw);
+}
+
+async function maPost(lenderId, apiKey, base, entity, action, body) {
+  const token = await maAuth(lenderId, apiKey, entity, action);
+  log(`POST /${entity}/${action}`);
+  log(JSON.stringify(body, null, 2));
+  const PROXY = 'https://ma-proxy.lawrence-9c8.workers.dev';
+  const resp = await fetch(`${PROXY}/${entity}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'ACCOUNT-ID': lenderId, 'API-AUTH': token },
+    body: JSON.stringify(body),
+  });
+  const text = await resp.text();
+  let result;
+  try { result = JSON.parse(text); } catch { result = { raw: text }; }
+  log(`Response ${resp.status}: ${JSON.stringify(result)}`);
+  return { status: resp.status, result };
+}
+
+// ── Main Submission Flow ─────────────────────────────────
+function log(msg) {
+  logLines.push(msg);
+  const el = document.getElementById('log-output');
+  if (el) el.textContent = logLines.join('\n');
+}
+
+function setStep(idx, state) {
+  const el = document.getElementById(`step-${idx}`);
+  if (el) el.className = `progress-step ${state}`;
+}
+
+async function runSubmission() {
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="sp" style="border-top-color:#e8e4da"></div> Submitting…';
+
+  logLines = [];
+  const lenderId = val('cfg-lender');
+  const apiKey   = val('cfg-key');
+  const isTest   = document.getElementById('cfg-env').value === 'test';
+  const base     = isTest ? 'https://demo.mortgageautomator.com/api' : 'https://app.mortgageautomator.com/api';
+
+  // Show result card with progress
+  document.getElementById('card-result').style.display = 'block';
+  document.getElementById('card-result').scrollIntoView({ behavior: 'smooth' });
+
+  const steps = ['Create Loan', 'Main Property Mortgages', 'Get Other Property IDs', 'Other Property Mortgages'];
+  document.getElementById('progress-bar').innerHTML = steps.map((s,i) =>
+    `<div class="progress-step" id="step-${i}">${s}</div>`).join('');
+  document.getElementById('result-body').innerHTML = `<div id="log-output" class="log-box"></div>`;
+
+  try {
+    // ── STEP 1: Build borrowers ──
+    const borrowers = [];
+    document.querySelectorAll('.borrower-block').forEach(block => {
+      const idx = block.id.replace('borrower-','');
+      if (!document.getElementById(`b${idx}-first_name`)) return;
+      const dob = dateToUnix(val(`b${idx}-dob`));
+      const rsInt = intVal(`b${idx}-residential_status`);
+      const b = {
+        first_name:         val(`b${idx}-first_name`) || undefined,
+        last_name:          val(`b${idx}-last_name`)  || undefined,
+        email:              val(`b${idx}-email`)       || undefined,
+        mobile:             val(`b${idx}-mobile`)      || undefined,
+        homephone:          val(`b${idx}-homephone`)   || undefined,
+        workphone:          val(`b${idx}-workphone`)   || undefined,
+        dob:                dob,
+        ssn:                val(`b${idx}-ssn`)         || undefined,
+        marital:            val(`b${idx}-marital`)     || undefined,
+        residential_status: rsInt || undefined,
+        iscorporation:      intVal(`b${idx}-iscorporation`) ?? 0,
+        l_is_main_client:   intVal(`b${idx}-is_main`) ?? (parseInt(idx) === 0 ? 1 : 0),
+        l_is_guarantor:     0,
+        address: {
+          street: val(`b${idx}-addr-street`) || undefined,
+          city:   val(`b${idx}-addr-city`)   || undefined,
+          prov:   val(`b${idx}-addr-prov`)   || undefined,
+          zip:    val(`b${idx}-addr-zip`)    || undefined,
+        }
+      };
+      borrowers.push(b);
+    });
+
+    // ── STEP 1: Build other properties (addresses only, mortgages added later) ──
+    const otherProps = [];
+    document.querySelectorAll('[id^="op-"]').forEach(el => {
+      const idx = el.id.replace('op-','');
+      if (!document.getElementById(`op${idx}-street`)) return;
+      otherProps.push({
+        _idx: idx,
+        address: {
+          street: val(`op${idx}-street`) || undefined,
+          city:   val(`op${idx}-city`)   || undefined,
+          prov:   val(`op${idx}-prov`)   || undefined,
+          zip:    val(`op${idx}-zip`)    || undefined,
+        },
+        value:          numVal(`op${idx}-value`),
+        purchase_price: numVal(`op${idx}-purchase_price`),
+        property_type:  intVal(`op${idx}-property_type`) ?? 0,
+      });
+    });
+
+    // ── STEP 1: Create loan ──────────────────────────────
+    setStep(0, 'active');
+    const loanPayload = {
+      loan_title: val('f-loan_title') || 'New Application',
+      purpose:    intVal('f-purpose') ?? 0,
+      substatus:  intVal('f-substatus') ?? 28081,
+      property: {
+        address: {
+          street: val('f-street')  || undefined,
+          city:   val('f-city')    || undefined,
+          prov:   val('f-prov')    || undefined,
+          zip:    val('f-zip')     || undefined,
+          country: 'Canada',
+        },
+        value:          numVal('f-property_value'),
+        purchase_price: numVal('f-purchase_price'),
+        property_type:  intVal('f-property_type') ?? 1,
+      },
+      mortgage: {
+        type:       intVal('f-loan_type') ?? 0,
+        amount:     numVal('f-amount'),
+        interest:   numVal('f-interest'),
+        position:   intVal('f-position') ?? 1,
+        term:       intVal('f-term')     || undefined,
+        repay_mode: intVal('f-repay_mode') ?? 0,
+        amort_in_years: 35,
+      },
+      borrowers,
+      other_properties: otherProps.map(p => ({
+        address: p.address, value: p.value, purchase_price: p.purchase_price, property_type: p.property_type
+      })),
+    };
+
+    const { result: r1 } = await maPost(lenderId, apiKey, base, 'loans', 'create', JSON.parse(JSON.stringify(loanPayload)));
+
+    // Try to get loan_id from result — matching Python's result.loan.loan_id
+    const loanId = r1?.result?.loan_id || r1?.result?.loan?.loan_id || r1?.result?.loan_seq_id;
+
+    if (!loanId) {
+      setStep(0, 'error');
+      const errMsg = r1?.message || r1?.error || JSON.stringify(r1);
+      document.getElementById('result-body').innerHTML = `
+        <div class="status err">✗ Loan creation failed: ${errMsg}</div>
+        <div style="font-size:11px;color:#888;margin:10px 0 4px;font-family:monospace">RESPONSE:</div>
+        <div class="resp-box">${JSON.stringify(r1, null, 2)}</div>
+        <div style="font-size:11px;color:#888;margin:10px 0 4px;font-family:monospace">PAYLOAD SENT:</div>
+        <div class="resp-box">${JSON.stringify(loanPayload, null, 2)}</div>`;
+      btn.disabled = false; btn.innerHTML = 'Submit to Mortgage Automator';
+      return;
+    }
+    setStep(0, 'done');
+    log(`✓ Loan created: ${loanId}`);
+
+    // ── STEP 2: Add main property existing mortgages ─────
+    setStep(1, 'active');
+    const mmEls = document.querySelectorAll('[id^="mm-"]');
+    for (const el of mmEls) {
+      const idx = el.id.replace('mm-','');
+      const holder = val(`mm${idx}-holder`);
+      if (!holder) continue;
+      const mmPayload = {
+        loan_id:       parseInt(loanId),
+        type:          intVal(`mm${idx}-type`) ?? 1,
+        holder,
+        face_value:    numVal(`mm${idx}-face_value`),
+        balance:       numVal(`mm${idx}-balance`),
+        payment:       numVal(`mm${idx}-payment`),
+        frequency:     0,
+        interest_rate: numVal(`mm${idx}-interest_rate`),
+        rate_type:     intVal(`mm${idx}-rate_type`) ?? 1,
+        term_type:     intVal(`mm${idx}-term_type`) ?? 0,
+        maturity_date: dateToUnix(val(`mm${idx}-maturity_date`)),
+      };
+      await maPost(lenderId, apiKey, base, 'existingmortgages', 'create', JSON.parse(JSON.stringify(mmPayload)));
+    }
+    setStep(1, 'done');
+
+    // ── STEP 3: Get other property IDs ───────────────────
+    setStep(2, 'active');
+    if (otherProps.length > 0) {
+      const { result: r2 } = await maPost(lenderId, apiKey, base, 'loans', 'get', { loan_id: parseInt(loanId) });
+      const fetchedProps = r2?.result?.other_properties || r2?.result?.loan?.other_properties || [];
+      log(`Fetched ${fetchedProps.length} other properties`);
+
+      setStep(2, 'done');
+
+      // ── STEP 4: Add mortgages to other properties ─────
+      setStep(3, 'active');
+      for (const fp of fetchedProps) {
+        const propId = fp?.property_id || fp?.id;
+        const propStreet = fp?.address?.street || '';
+        // Match fetched property to our form by street
+        const match = otherProps.find(op => {
+          const s = op.address?.street || '';
+          return s && propStreet && propStreet.toLowerCase().includes(s.split(' ')[1]?.toLowerCase() || '');
+        });
+        if (!match) continue;
+        const oi = match._idx;
+        // Get mortgages for this property
+        const mEls = document.querySelectorAll(`[id^="op${oi}-m"]`);
+        for (const mel of mEls) {
+          const mParts = mel.id.match(/op(\d+)-m(\d+)$/);
+          if (!mParts) continue;
+          const [, pi, mi] = mParts;
+          const holder = val(`op${pi}-m${mi}-holder`);
+          if (!holder) continue;
+          const omPayload = {
+            loan_id:       parseInt(loanId),
+            property_id:   propId,
+            type:          intVal(`op${pi}-m${mi}-type`) ?? 1,
+            holder,
+            face_value:    numVal(`op${pi}-m${mi}-face_value`),
+            balance:       numVal(`op${pi}-m${mi}-balance`),
+            payment:       numVal(`op${pi}-m${mi}-payment`),
+            frequency:     0,
+            interest_rate: numVal(`op${pi}-m${mi}-interest_rate`),
+            rate_type:     intVal(`op${pi}-m${mi}-rate_type`) ?? 1,
+            term_type:     intVal(`op${pi}-m${mi}-term_type`) ?? 0,
+            maturity_date: dateToUnix(val(`op${pi}-m${mi}-maturity_date`)),
+          };
+          await maPost(lenderId, apiKey, base, 'existingmortgages', 'create', JSON.parse(JSON.stringify(omPayload)));
+        }
+      }
+      setStep(3, 'done');
+    } else {
+      setStep(2, 'done');
+      setStep(3, 'done');
+    }
+
+    // ── SUCCESS ──────────────────────────────────────────
+    document.getElementById('result-body').innerHTML = `
+      <div class="status ok">✓ All steps completed successfully</div>
+      <div class="loan-id">Loan ID: ${loanId}</div>
+      <div class="btns">
+        <button class="btn btn-dark" onclick="window.open('https://app.mortgageautomator.com','_blank')">Open Mortgage Automator ↗</button>
+        <button class="btn btn-light" onclick="resetTool()">Import Another</button>
+      </div>
+      <div style="font-size:11px;color:#888;margin:16px 0 4px;font-family:monospace">FULL LOG:</div>
+      <div class="log-box">${logLines.join('\n')}</div>`;
+
+  } catch (err) {
+    let errMsg = err.message;
+    if (errMsg.includes('Load failed') || errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+      errMsg = 'Network error — could not reach the proxy. Make sure the Cloudflare Worker is deployed at https://ma-proxy.lawrence-9c8.workers.dev';
+    }
+    document.getElementById('result-body').innerHTML = `
+      <div class="status err">✗ ${errMsg}</div>
+      <div class="log-box">${logLines.join('\n')}</div>`;
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = 'Submit to Mortgage Automator';
+}
+
+// ── Reset ────────────────────────────────────────────────
+function resetTool() {
+  document.getElementById('card-upload').style.display = 'block';
+  document.getElementById('card-fields').style.display = 'none';
+  document.getElementById('card-result').style.display = 'none';
+  document.getElementById('borrower-tabs').innerHTML = '';
+  document.getElementById('borrower-blocks').innerHTML = '';
+  document.getElementById('main-mortgages').innerHTML = '';
+  document.getElementById('other-properties').innerHTML = '';
+  borrowerCount = 0; otherPropertyCount = 0; mainMortgageCount = 0;
+  otherMortgageCounts = {}; logLines = [];
+  fi.value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  init();
+}
+
+// Start
+init();
+
+function copyDebug() {
+  if (!window._lastPdfText) { alert('No PDF loaded yet.'); return; }
+  navigator.clipboard.writeText(window._lastPdfText).then(() => {
+    alert('Raw PDF text copied to clipboard! Paste it into the chat.');
+  });
+}
+
+async function testProxy() {
+  const el = document.getElementById('proxy-test-result');
+  el.textContent = 'Testing…';
+  try {
+    const r = await fetch('https://ma-proxy.lawrence-9c8.workers.dev/loans/create', { method: 'GET' });
+    const t = await r.text();
+    el.style.color = '#1a4a1e';
+    el.textContent = '✓ Proxy reachable: ' + t.substring(0, 60);
+  } catch(e) {
+    el.style.color = '#7a1a1a';
+    el.textContent = '✗ Proxy unreachable: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>
